@@ -1,0 +1,137 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Buddy.BehaviorTree;
+using Buddy.Swtor;
+using Buddy.Swtor.Objects;
+using PureSWTor.Helpers;
+using PureSWTor.Core;
+using PureSWTor.Managers;
+
+using Action = Buddy.BehaviorTree.Action;
+using Distance = PureSWTor.Helpers.Global.Distance;
+
+namespace PureSWTor.Classes.Marauder
+{
+    class Rage : RotationBase
+    {
+        #region Overrides of RotationBase
+
+        public override string Revision
+        {
+            get { return ""; }
+        }
+
+        public override CharacterDiscipline KeySpec
+        {
+            get { return CharacterDiscipline.Fury; }
+        }
+
+        public override string Name
+        {
+            get { return "Marauder Rage by distiny"; }
+        }
+
+        public override Composite PreCombat
+        {
+            get
+            {
+                return new PrioritySelector(
+                    Spell.Buff("Shii-Cho Form"),
+                    Spell.Buff("Unnatural Might"),
+                    //Scavenge.ScavengeCorpse,
+                    Rest.HandleRest   
+                    );
+            }
+        }
+
+        private Composite HandleCoolDowns
+        {
+            get
+            {
+                return new LockSelector(
+                    Spell.Buff("Unleash"),
+                    Spell.Buff("Cloak of Pain", ret => Me.HealthPercent <= 90),
+                    Spell.Buff("Force Camouflage", ret => Me.HealthPercent <= 70),
+                    Spell.Buff("Saber Ward", ret => Me.HealthPercent <= 50),
+                    MedPack.UseItem(ret => Me.HealthPercent <= 30),
+                    Spell.Buff("Undying Rage", ret => Me.HealthPercent <= 10),
+                    Spell.Buff("Frenzy", ret => Me.BuffCount("Fury") < 5),
+                    Spell.Buff("Berserk")
+                    ); 
+            }
+        }
+
+        private Composite HandleSingleTarget
+        {
+            get
+            {
+                return new LockSelector(
+                    //*Ranged Attacks, remove the // in order to activate them. Otherwise, you use to start combat
+                    Spell.Cast("Force Charge", ret => !LazyRaider.MovementDisabled && Me.CurrentTarget.Distance >= 1f && Me.CurrentTarget.Distance <= 3f),
+
+                    //Move To Range
+                    CloseDistance(Distance.Melee),
+
+                    //Rotation
+                    Spell.Cast("Vicious Throw", ret => Me.CurrentTarget.HealthPercent <= 30),
+                    Spell.Cast("Force Crush"),
+                    Spell.Cast("Obliterate"),
+                    Spell.Cast("Raging Burst", ret => Me.HasBuff("Dominate")),
+                    Spell.Cast("Force Scream", ret => Me.HasBuff("Battle Cry") || Me.ActionPoints >= 5),
+                    Spell.Cast("Furious Strike"),
+                    Spell.Cast("Ravage"),
+                    Spell.Cast("Force Choke"),
+                    Spell.Cast("Vicious Slash", ret => Me.HasBuff("Berserk")),
+                    Spell.Cast("Battering Assault"),
+                    Spell.Cast("Assault")
+                    );
+            }
+        }
+
+        private Composite HandleAOE
+         {
+             get
+             {
+                 return new Decorator(ret => ShouldAOE(3, Distance.MeleeAoE),
+                     new LockSelector());
+             }
+         }
+
+        private class LockSelector : PrioritySelector
+        {
+            public LockSelector(params Composite[] children)
+                : base(children)
+            {
+            }
+
+            public override RunStatus Tick(object context)
+            {
+                using (BuddyTor.Memory.AcquireFrame())
+                {
+                    return base.Tick(context);
+                }
+            }
+        }
+
+        public override Composite PVERotation
+        {
+            get
+            {
+                return new PrioritySelector(
+                    Spell.WaitForCast(),
+                    HandleCoolDowns,
+                    //HandleAOE,
+                    HandleSingleTarget
+                );
+            }
+        }
+
+        public override Composite PVPRotation
+        {
+            get { return PVERotation; }
+        }
+
+        #endregion
+    }
+}

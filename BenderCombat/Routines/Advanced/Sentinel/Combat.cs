@@ -1,0 +1,90 @@
+﻿// Copyright (C) 2011-2015 Bossland GmbH
+// See the file LICENSE for the source code's detailed license
+
+using Buddy.BehaviorTree;
+using BenderCombat.Core;
+using BenderCombat.Helpers;
+
+namespace BenderCombat.Routines
+{
+	internal class Combat : RotationBase
+	{
+		public override string Name
+		{
+			get { return "Sentinel Combat"; }
+		}
+
+		public override Composite Buffs
+		{
+			get
+			{
+				return new PrioritySelector(
+					Spell.Buff("Ataru Form"),
+					Spell.Buff("Force Might")
+					);
+			}
+		}
+
+		public override Composite Cooldowns
+		{
+			get
+			{
+				return new PrioritySelector(
+					Spell.Buff("Resolute"),
+					Spell.Buff("Rebuke", ret => Me.HealthPercent <= 90),
+					Spell.Buff("Saber Reflect", ret => Me.HealthPercent <= 70),
+					Spell.Buff("Saber Ward", ret => Me.HealthPercent <= 50),
+					Spell.Buff("Valorous Call", ret => Me.BuffCount("Centering") < 5),
+					Spell.Buff("Zen", ret => Me.CurrentTarget.Distance <= 0.4f)
+					);
+			}
+		}
+
+		public override Composite SingleTarget
+		{
+			get
+			{
+				// Problematic Invulnerability Field
+				
+				return new PrioritySelector(
+					// new Decorator(ret => Me.CurrentTarget.HasBuff("Problematic Invulnerability Field"),
+						// new PrioritySelector(
+							// Spell.Cast("Strike")
+							// )),
+				
+				
+					Spell.Cast("Force Leap", ret => Me.CurrentTarget.Distance >= 1f && Me.CurrentTarget.Distance <= 3f),
+					Spell.Cast("Twin Saber Throw", ret => Me.CurrentTarget.Distance <= 3f),
+
+					//Movement
+					CombatMovement.CloseDistance(Distance.Melee),
+
+					//Rotation
+					Spell.Cast("Force Kick", ret => Me.CurrentTarget.IsCasting && !BenderCombat.MovementDisabled),
+					Spell.Cast("Dispatch", ret => Me.HasBuff("Hand of Justice")),
+					Spell.Cast("Precision", ret => Me.CurrentTarget.Distance <= 0.4f),
+					Spell.Cast("Blade Dance", ret => Me.HasBuff("Precision")),
+					Spell.Cast("Clashing Blast", ret => Me.HasBuff("Opportune Attack") && Me.Level >= 57),
+					Spell.Cast("Blade Storm", ret => Me.HasBuff("Opportune Attack") && Me.Level < 57),
+					Spell.Cast("Blade Rush", ret => Me.CurrentTarget.Distance <= 0.4f),
+					Spell.Cast("Slash", ret => Me.ActionPoints >= 7 && Me.Level < 26),
+					Spell.Cast("Zealous Strike", ret => Me.ActionPoints <= 7),
+					Spell.Cast("Strike", ret => Me.CurrentTarget.Distance <= 0.4f)
+					);
+			}
+		}
+
+		public override Composite AreaOfEffect
+		{
+			get
+			{
+				return new Decorator(ret => Targeting.ShouldPbaoe,
+					new PrioritySelector(
+						Spell.Cast("Force Sweep"),
+						Spell.Cast("Cyclone Slash"),
+						Spell.Cast("Strike")
+						));
+			}
+		}
+	}
+}
